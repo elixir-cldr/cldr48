@@ -1,7 +1,7 @@
 defmodule Cldr.Mixfile do
   use Mix.Project
 
-  @version "2.44.0-rc.2"
+  @version "2.44.0-rc.5"
 
   def project do
     [
@@ -129,7 +129,8 @@ defmodule Cldr.Mixfile do
         "priv/cldr/validity/variants.json",
         "priv/cldr/validity/units.json",
         "priv/cldr/bcp47/u.json",
-        "priv/cldr/bcp47/t.json"
+        "priv/cldr/bcp47/t.json",
+        "priv/cldr/language_matching.json"
       ]
     ]
   end
@@ -184,7 +185,10 @@ defmodule Cldr.Mixfile do
 
   defp groups_for_modules do
     [
-      "Language Tag": ~r/^Cldr.LanguageTag.?/,
+      "Language Tag": [
+        ~r/^Cldr.LanguageTag.?/,
+        ~r/^Cldr.Locale.?/
+      ],
       "Plural Rules": ~r/^Cldr.Number.?/,
       Protocols: [
         Cldr.Chars,

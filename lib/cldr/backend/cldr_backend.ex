@@ -36,7 +36,7 @@ defmodule Cldr.Backend do
             cldr_locale_name: :"en-001",
             language_subtags: [],
             extensions: %{},
-            gettext_locale_name: "en",
+            gettext_locale_name: "en-GB",
             language: "en",
             locale: %{},
             private_use: [],
@@ -282,6 +282,7 @@ defmodule Cldr.Backend do
              canonical_locale_name: "pl",
              cldr_locale_name: :pl,
              extensions: %{},
+             gettext_locale_name: "en",
              language: "pl",
              locale: %{},
              private_use: [],
@@ -377,12 +378,12 @@ defmodule Cldr.Backend do
             {:ok, "en"}
 
             iex> import Cldr.LanguageTag.Sigil
-            iex> #{inspect(__MODULE__)}.put_gettext_locale(~l"de")
+            iex> #{inspect(__MODULE__)}.put_gettext_locale(~l"ru")
             {
               :error,
               {
                 Cldr.UnknownLocaleError,
-                "Locale TestBackend.Cldr.Locale.new!(\\"de-DE\\") does not map to a known gettext locale name"
+                "Locale TestBackend.Cldr.Locale.new!(\\"ru-RU\\") does not map to a known gettext locale name"
               }
             }
 
@@ -672,7 +673,7 @@ defmodule Cldr.Backend do
             canonical_locale_name: "en-001",
             cldr_locale_name: :"en-001",
             extensions: %{},
-            gettext_locale_name: "en",
+            gettext_locale_name: "en-GB",
             language: "en",
             locale: %{},
             private_use: [],

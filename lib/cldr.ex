@@ -159,6 +159,7 @@ defmodule Cldr do
          canonical_locale_name: "pl",
          cldr_locale_name: :pl,
          extensions: %{},
+         gettext_locale_name: "en",
          language: "pl",
          locale: %{},
          private_use: [],
@@ -307,12 +308,12 @@ defmodule Cldr do
         {:ok, "en"}
 
         iex> import Cldr.LanguageTag.Sigil
-        iex> Cldr.put_gettext_locale(~l"de")
+        iex> Cldr.put_gettext_locale(~l"ru")
         {
           :error,
           {
             Cldr.UnknownLocaleError,
-            "Locale TestBackend.Cldr.Locale.new!(\\"de-DE\\") does not map to a known gettext locale name"
+            "Locale TestBackend.Cldr.Locale.new!(\\"ru-RU\\") does not map to a known gettext locale name"
           }
         }
     """
@@ -469,7 +470,7 @@ defmodule Cldr do
         cldr_locale_name: :"en-001",
         language_subtags: [],
         extensions: %{},
-        gettext_locale_name: "en",
+        gettext_locale_name: "en-GB",
         language: "en",
         locale: %{},
         private_use: [],
@@ -520,7 +521,7 @@ defmodule Cldr do
         cldr_locale_name: :"en-001",
         language_subtags: [],
         extensions: %{},
-        gettext_locale_name: "en",
+        gettext_locale_name: "en-GB",
         language: "en",
         locale: %{},
         private_use: [],
@@ -691,7 +692,7 @@ defmodule Cldr do
 
   """
   @spec display_name(term(), Keyword.t()) :: String.t()
-  @display_name_options [prefer: :default, dialect: true]
+  @display_name_options [prefer: :standard, language_display: :dialect]
 
   def display_name(term, options \\ []) do
     options = Keyword.merge(@display_name_options, options)
@@ -798,7 +799,7 @@ defmodule Cldr do
         canonical_locale_name: "af",
         cldr_locale_name: :af,
         extensions: %{},
-        gettext_locale_name: nil,
+        gettext_locale_name: "en",
         language: "af",
         locale: %{},
         private_use: [],
@@ -878,7 +879,7 @@ defmodule Cldr do
         canonical_locale_name: "af",
         cldr_locale_name: :af,
         extensions: %{},
-        gettext_locale_name: nil,
+        gettext_locale_name: "en",
         language: "af",
         locale: %{},
         private_use: [],
