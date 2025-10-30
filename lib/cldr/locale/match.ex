@@ -4,7 +4,24 @@ defmodule Cldr.Locale.Match do
 
   """
 
-  @default_threshold 100
+  alias Cldr.Locale
+
+  # Since the default distance for differnt territories is 4
+  # and the default distance for different scripts is 50 this
+  # default will match if there is a territory difference or
+  # a script different but not both. Bote that a language
+  # default distance is 80 so by default different languages
+  # can never match.
+
+  @default_threshold 50
+
+  # When looking for a best match amongst multiple desired
+  # languages we want the languages earlier in the list to
+  # be preferred over those later in the list in the cases
+  # where their match distance is the same. We do that by
+  # demoting later entries in the list by am amount greater
+  # than the default territory difference (which is 4).
+  @more_than_territory_difference 5
 
   @match_list [
     [:language, :script, :territory],
@@ -71,9 +88,9 @@ defmodule Cldr.Locale.Match do
         {:ok, "zh-Hant", 5}
 
         iex> supported = Cldr.known_gettext_locale_names()
-        ["en", "en-GB", "es", "it"]
+        ["en", "en_GB", "es", "it"]
         iex> Cldr.Locale.Match.best_match("en-GB", supported: supported)
-        {:ok, "en-GB", 0}
+        {:ok, "en_GB", 0}
         iex> Cldr.Locale.Match.best_match("zh-HK", supported: supported)
         {:error, {Cldr.NoMatchingLocale, "No match for desired locales \\"zh-HK\\""}}
 
@@ -91,20 +108,48 @@ defmodule Cldr.Locale.Match do
     supported =
       options
       |> Keyword.get_lazy(:supported, &backend.known_locale_names/0)
+      |> Enum.with_index()
 
     matches =
-      for {candidate, index} <- desired_list, supported <- supported,
-          match_distance = match_distance(candidate, supported, backend),
-          match_distance < threshold  do
-        {supported, match_distance, index}
+      for {candidate, priority} <- desired_list, {supported, index} <- supported,
+          {:ok, candidate_tag} = validate(candidate, backend, :skip_subtags_for_und),
+          {:ok, supported_tag} = validate(supported, backend),
+          match_distance = match_distance(candidate_tag, supported_tag, backend),
+          match_distance <= threshold do
+        {supported, supported_tag, match_distance, priority, index}
       end
-      |> Enum.sort_by(&match_key/1)
+      |> Enum.sort(&language_comparator/2)
       # |> IO.inspect(label: "Ordered matches")
 
     case matches do
-      [{supported, distance, _index} | _rest] -> {:ok, supported, distance}
+      [{supported, _supported_tag, distance, _priority, _index} | _rest] -> {:ok, supported, distance}
       [] -> {:error, {Cldr.NoMatchingLocale, "No match for desired locales #{inspect desired}"}}
     end
+  end
+
+  # "und" sorts after any other language that has the same distance score
+  defp language_comparator({"und", _, distance, _, _}, {_lang, _, distance, _, _}) do
+    false
+  end
+
+  defp language_comparator({_lang, _, distance, _, _}, {"und", _, distance, _, _}) do
+    true
+  end
+
+  defp language_comparator(a, b) do
+    if same_base_language?(a, b) do
+      match_key_with_paradigm(a) < match_key_with_paradigm(b)
+    else
+      match_key_no_paradigm(a) < match_key_no_paradigm(b)
+    end
+  end
+
+  defp same_base_language?(a, b) do
+    extract_base_language(a) == extract_base_language(b)
+  end
+
+  defp extract_base_language({_supported, supported_tag, _, _, _}) do
+    supported_tag.language
   end
 
   # If the language is a paradigmn locale then it
@@ -113,18 +158,20 @@ defmodule Cldr.Locale.Match do
   # key.  Since false sorts before true, we use
   # "not in" rather than "in".
 
-  defp match_key({language, distance, index}) do
-    {distance, index, atomize(language) not in paradigm_locales()}
+  defp match_key_with_paradigm({_language, supported, distance, priority, index}) do
+    maybe_paradigm_locale =
+      Locale.locale_name_from(supported)
+
+    {distance + (priority * @more_than_territory_difference),
+      !paradigm_locale(maybe_paradigm_locale), index}
   end
 
-  defp atomize(string) when is_binary(string) do
-    String.to_existing_atom(string)
-  rescue _e ->
-    nil
+  defp match_key_no_paradigm({_language, _supported_tag, distance, priority, index}) do
+    {distance + (priority * @more_than_territory_difference), index}
   end
 
-  defp atomize(atom) when is_atom(atom) do
-    atom
+  defp paradigm_locale(language) do
+    language in paradigm_locales()
   end
 
   @doc """
@@ -138,9 +185,6 @@ defmodule Cldr.Locale.Match do
 
   * `supported` is any valid locale returned by `Cldr.known_locale_names/1`
     or a string or atom locale name.
-
-  * `index` is the position of this `desired` language in a
-    list of desired languages. The default is `0`.
 
   * `backend` is any module that includes `use Cldr` and therefore
     is a `Cldr` backend module. The default is `Cldr.default_backend!/0`.
@@ -166,7 +210,7 @@ defmodule Cldr.Locale.Match do
       5
 
       iex> Cldr.Locale.Match.match_distance("en", "zh-Hans")
-      100
+      134
 
   """
   @doc since: "2.44.0"
@@ -175,22 +219,33 @@ defmodule Cldr.Locale.Match do
          {:ok, supported} <- validate(supported, backend) do
       @match_list
       |> Enum.reduce(0, &subtag_distance(desired, supported, &1, &2))
-      |> min(100)
     end
   end
 
-  defp validate(%Cldr.LanguageTag{} = locale, _backend) do
+  @doc false
+  def validate(locale, backend, subtags \\ :add_subtags)
+
+  def validate(%Cldr.LanguageTag{} = locale, _backend, _add_subtags) do
     {:ok, locale}
   end
 
-  defp validate("und" = locale, backend) do
+  # Likely subtags has an entry for "und" that will
+  # transform it to `en-Latn-US` which is not what
+  # we want for matching. So don't apply liekely subtags.
+  def validate("und" <> _rest = locale, backend, :skip_subtags_for_und) do
     options = [skip_gettext_and_cldr: true, skip_rbnf_name: true, add_likely_subtags: false]
     Cldr.Locale.canonical_language_tag(locale, backend, options)
   end
 
-  defp validate(locale, backend) when is_binary(locale) do
+  def validate(locale, backend, _add_subtags) when is_binary(locale) do
     options = [skip_gettext_and_cldr: true, skip_rbnf_name: true]
     Cldr.Locale.canonical_language_tag(locale, backend, options)
+  end
+
+  def validate(locale, backend, add_subtags) when is_atom(locale) do
+    locale
+    |> Atom.to_string()
+    |> validate(backend, add_subtags)
   end
 
   defp subtag_distance(desired, supported, subtags, acc) do
@@ -202,12 +257,14 @@ defmodule Cldr.Locale.Match do
   # When the last subtag is the same, don't process it following the rule:
   # If respective subtags in each language tag are identical, remove the subtag from each
   # (logically) and continue.
+
   defp distance([_, _, territory], [_, _, territory], acc), do: acc
   defp distance([_, script], [_, script], acc), do: acc
   defp distance([language], [language], acc), do: acc
 
   # If the subtags are identical then there is no difference
   defp distance(desired, desired, acc), do: acc + 0
+
 
   # Now we have to calculate
   defp distance(desired, supported, acc), do: acc + match_score(desired, supported)
@@ -217,7 +274,7 @@ defmodule Cldr.Locale.Match do
       cond do
         matches?(desired, match.desired) &&
             matches?(supported, match.supported) ->
-          {:halt, match.distance} # |> IO.inspect(label: "Match for #{inspect match}}")
+          {:halt, match.distance} # |> IO.inspect(label: "Match for #{inspect match}} desire: #{inspect desired} support: #{inspect supported}")
 
         !Map.get(match, :one_way) && matches?(desired, match.supported) &&
             matches?(supported, match.desired) ->
@@ -280,10 +337,8 @@ defmodule Cldr.Locale.Match do
     Map.fetch!(match_variables(), variable)
   end
 
-  # Map.fetch!/3 not Map.take/2 because
-  # we need to guarantee order
-  defp subtags(locale, subtags) do
-    Enum.map(subtags, &(Map.fetch!(locale, &1)))
-  end
+  defp subtags(locale, [:language]), do: [locale.language]
+  defp subtags(locale, [:language, :script]), do: [locale.language, locale.script]
+  defp subtags(locale, [:language, :script, :territory]), do: [locale.language, locale.script, locale.territory]
 
 end

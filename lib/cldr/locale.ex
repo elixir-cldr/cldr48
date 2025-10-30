@@ -49,7 +49,7 @@ defmodule Cldr.Locale do
         canonical_locale_name: "en-CN",
         cldr_locale_name: :en,
         extensions: %{},
-        gettext_locale_name: "en-GB",
+        gettext_locale_name: "en_GB",
         language: "en",
         locale: %{},
         private_use: [],
@@ -93,7 +93,7 @@ defmodule Cldr.Locale do
       {:ok, %Cldr.LanguageTag{
         backend: TestBackend.Cldr,
         extensions: %{},
-        gettext_locale_name: "en",
+        gettext_locale_name: nil,
         language: "ro",
         language_subtags: [],
         language_variants: [],
@@ -153,7 +153,7 @@ defmodule Cldr.Locale do
         canonical_locale_name: "en-XX",
         cldr_locale_name: :en,
         extensions: %{},
-        gettext_locale_name: "en-GB",
+        gettext_locale_name: "en_GB",
         language: "en",
         locale: %{},
         private_use: [],
@@ -192,7 +192,7 @@ defmodule Cldr.Locale do
           canonical_locale_name: "en-AU-u-cf-account-tz-ausyd",
           cldr_locale_name: :"en-AU",
           extensions: %{},
-          gettext_locale_name: "en-GB",
+          gettext_locale_name: "en_GB",
           language: "en",
           language_subtags: [],
           language_variants: [],
@@ -1595,15 +1595,6 @@ defmodule Cldr.Locale do
   defp maybe_put_likely_subtags(language_tag, true), do: put_likely_subtags(language_tag)
   defp maybe_put_likely_subtags(language_tag, _), do: language_tag
 
-  @doc false
-  # def canonical_language_tag(%LanguageTag{backend: nil} = language_tag) do
-  #   canonical_language_tag(language_tag, Cldr.default_backend!(), add_likely_subtags: false)
-  # end
-  #
-  # def canonical_language_tag(%LanguageTag{backend: backend} = language_tag) do
-  #   canonical_language_tag(language_tag, backend, add_likely_subtags: false)
-  # end
-
   defp wrap(term, tag) do
     {tag, term}
   end
@@ -1706,6 +1697,21 @@ defmodule Cldr.Locale do
       updated_tag
     else
       substitute_aliases(updated_tag)
+    end
+  end
+
+  defp substitute(%LanguageTag{language: nil} = language_tag, :requested_name) do
+    locale_name = language_tag.requested_locale_name
+
+    if replacement_tag = aliases(locale_name, :language) do
+      type_tag = Cldr.LanguageTag.Parser.parse!(locale_name)
+
+      replacement_tag =
+        Map.put(replacement_tag, :language_variants, language_tag.language_variants)
+
+      merge_language_tags(replacement_tag, language_tag, type_tag)
+    else
+      language_tag
     end
   end
 
@@ -2280,8 +2286,12 @@ defmodule Cldr.Locale do
   def put_likely_subtags(%LanguageTag{} = language_tag) do
     %LanguageTag{language: language, script: script, territory: territory} = language_tag
     subtags = likely_subtags(language, script, territory, [])
-
-    Map.merge(subtags, language_tag, fn _k, v1, v2 -> if empty?(v2), do: v1, else: v2 end)
+    Map.merge(subtags, language_tag, fn
+      :language, v1, "und" ->
+        v1
+      _k, v1, v2 ->
+        if empty?(v2), do: v1, else: v2
+    end)
   end
 
   # The process of applying alias substitutions is a map merge.
