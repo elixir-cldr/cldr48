@@ -88,7 +88,7 @@ defmodule Cldr.Locale.Match do
         {:ok, "zh-Hant", 5}
 
         iex> supported = Cldr.known_gettext_locale_names()
-        ["en", "en_GB", "es", "it"]
+        ["bg_BG", "en", "en_GB", "es", "it"]
         iex> Cldr.Locale.Match.best_match("en-GB", supported: supported)
         {:ok, "en_GB", 0}
         iex> Cldr.Locale.Match.best_match("zh-HK", supported: supported)
@@ -170,7 +170,7 @@ defmodule Cldr.Locale.Match do
     {distance + (priority * @more_than_territory_difference), index}
   end
 
-  defp paradigm_locale(language) do
+  defp paradigm_locale(language) when is_binary(language) do
     language in paradigm_locales()
   end
 
